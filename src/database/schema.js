@@ -121,14 +121,8 @@ export async function initDatabase(db) {
       )
     `).run();
 
-    const existingIndexesHistory = await db.prepare(
-      `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'metrics_history'`
-    ).all();
-    const hasOldIndex = existingIndexesHistory.results.some(
-      idx => idx.name === 'idx_history_server_time_covering'
-    );
-    if (hasOldIndex) {
-      await db.prepare(`DROP INDEX IF EXISTS idx_history_server_time_covering`).run();
+    const dropResult = await db.prepare(`DROP INDEX IF EXISTS idx_history_server_time_covering`).run();
+    if (dropResult.meta.changes > 0) {
       console.log('✅ 已删除旧的覆盖索引，减少索引体积和写入放大');
     }
 
