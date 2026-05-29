@@ -935,7 +935,7 @@ export async function handleServerDetail(request, env, sys, viewId) {
       options: createChartOptions('%')
     });
     
-    // 内存图表 - 紫色
+    // 内存图表 - 紫色(内存) + 橙色(Swap)
     charts.ram = new Chart(document.getElementById('chartRAM').getContext('2d'), {
       type: 'line',
       data: { 
@@ -946,9 +946,17 @@ export async function handleServerDetail(request, env, sys, viewId) {
           backgroundColor: 'rgba(179, 146, 240, 0.05)', 
           fill: true,
           borderWidth: 1.5
+        },
+        { 
+          label: 'Swap', 
+          data: [], 
+          borderColor: '#ffb870', 
+          backgroundColor: 'rgba(255, 184, 112, 0.05)', 
+          fill: true,
+          borderWidth: 1.5
         }] 
       },
-      options: createChartOptions('%')
+      options: createChartOptions('%', true)
     });
     
     // 磁盘图表 - 青色
@@ -1109,6 +1117,43 @@ export async function handleServerDetail(request, env, sys, viewId) {
       }
     }
     
+    function calcSwapPercent(item) {
+      const swapTotal = parseFloat(item.swap_total) || 0;
+      const swapUsed = parseFloat(item.swap_used) || 0;
+      if (swapTotal === 0) return 0;
+      return (swapUsed / swapTotal) * 100;
+    }
+    
+    function updateChartDatasetWithSwap(chart, datasetIndex, dataPoints) {
+      if (!dataPoints || dataPoints.length === 0) return;
+      
+      const dataset = chart.data.datasets[datasetIndex];
+      const startTime = Date.now() - currentHours * 60 * 60 * 1000;
+      
+      let sampledData = dataPoints;
+      if (dataPoints.length > 500) {
+        const step = Math.ceil(dataPoints.length / 500);
+        sampledData = dataPoints.filter((_, i) => i % step === 0);
+      }
+      
+      const processedData = sampledData.map(d => ({
+        x: new Date(d.timestamp).getTime(),
+        y: calcSwapPercent(d)
+      }));
+      
+      processedData.sort((a, b) => a.x - b.x);
+      
+      const completeData = [];
+      
+      if (processedData[0].x > startTime) {
+        completeData.push({ x: startTime, y: null });
+      }
+      
+      completeData.push(...processedData);
+      
+      dataset.data = completeData.filter(d => d.x >= startTime);
+    }
+    
     function updateChartDataset(chart, datasetIndex, dataPoints, xField = 'timestamp', yField) {
       if (!dataPoints || dataPoints.length === 0) return;
       
@@ -1263,6 +1308,7 @@ export async function handleServerDetail(request, env, sys, viewId) {
         
         updateChartDataset(charts.cpu, 0, allData, 'timestamp', 'cpu');
         updateChartDataset(charts.ram, 0, allData, 'timestamp', 'ram');
+        updateChartDatasetWithSwap(charts.ram, 1, allData);
         updateChartDataset(charts.disk, 0, allData, 'timestamp', 'disk');
         updateChartDataset(charts.proc, 0, allData, 'timestamp', 'processes');
         updateChartDataset(charts.net, 0, allData, 'timestamp', 'net_in_speed');
@@ -1366,6 +1412,8 @@ export async function handleServerDetail(request, env, sys, viewId) {
         const dataTimestamp = new Date(data.last_updated).getTime();
         appendDataToChart(charts.cpu, 0, dataTimestamp, data.cpu);
         appendDataToChart(charts.ram, 0, dataTimestamp, data.ram);
+        const swapPercent = (parseFloat(data.swap_total) > 0) ? (parseFloat(data.swap_used) / parseFloat(data.swap_total)) * 100 : 0;
+        appendDataToChart(charts.ram, 1, dataTimestamp, swapPercent);
         appendDataToChart(charts.disk, 0, dataTimestamp, data.disk);
         appendDataToChart(charts.proc, 0, dataTimestamp, data.processes);
         appendDataToChart(charts.net, 0, dataTimestamp, data.net_in_speed);
