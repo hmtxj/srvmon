@@ -274,23 +274,33 @@ export default {
       // === Command Execution API ===
       // Agent polls for pending commands (authenticated by server_id + secret)
       { method: 'POST', path: '/api/command/poll', handler: async () => {
-        const data = await request.json();
-        const { id, secret } = data;
-        if (secret !== env.API_SECRET) {
-          return createUnauthorizedResponse('Invalid secret');
+        await initDatabase(env.DB);
+        try {
+          const data = await request.json();
+          const { id, secret } = data;
+          if (secret !== env.API_SECRET) {
+            return createUnauthorizedResponse('Invalid secret');
+          }
+          const commands = await getPendingCommands(env.DB, id);
+          return createSuccessResponse({ commands, count: commands.length });
+        } catch (e) {
+          return createSuccessResponse({ commands: [], count: 0, error: e.message });
         }
-        const commands = await getPendingCommands(env.DB, id);
-        return createSuccessResponse({ commands, count: commands.length });
       }},
       // Agent reports command execution result
       { method: 'POST', path: '/api/command/report', handler: async () => {
-        const data = await request.json();
-        const { id, secret, command_id, output, exit_code } = data;
-        if (secret !== env.API_SECRET) {
-          return createUnauthorizedResponse('Invalid secret');
+        await initDatabase(env.DB);
+        try {
+          const data = await request.json();
+          const { id, secret, command_id, output, exit_code } = data;
+          if (secret !== env.API_SECRET) {
+            return createUnauthorizedResponse('Invalid secret');
+          }
+          await completeCommand(env.DB, command_id, output, exit_code);
+          return createSuccessResponse({ success: true });
+        } catch (e) {
+          return createSuccessResponse({ success: false, error: e.message });
         }
-        await completeCommand(env.DB, command_id, output, exit_code);
-        return createSuccessResponse({ success: true });
       }},
       { method: 'GET', path: '/updateDatabase', handler: async () => {
         await ensureSiteSettings();
