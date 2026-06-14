@@ -43,30 +43,4 @@ if (fs.existsSync(indexHtmlPath)) {
   }
 }
 
-// 打包 Worker 代码为 _worker.js（兼容 Cloudflare Pages 部署）
-console.log('Bundling Worker code into _worker.js...');
-await esbuild.build({
-  entryPoints: [path.join(srcDir, 'index.js')],
-  bundle: true,
-  format: 'esm',
-  platform: 'browser',
-  target: 'es2022',
-  outfile: path.join(distDir, '_worker.js'),
-  external: ['__STATIC_CONTENT_MANIFEST'],
-  define: {
-    'process.env.NODE_ENV': '"production"'
-  },
-});
-console.log('_worker.js generated successfully');
-
-// 添加 Pages fallback：如果 ASSETS 不可用，用本地读取代替
-const workerPath = path.join(distDir, '_worker.js');
-let workerCode = fs.readFileSync(workerPath, 'utf8');
-workerCode = workerCode.replace(
-  'const res = await env.ASSETS.fetch(',
-  'const res = await (env.ASSETS || { fetch: () => new Response("Not Found", { status: 404 }) }).fetch('
-);
-fs.writeFileSync(workerPath, workerCode, 'utf8');
-console.log('_worker.js patched for Pages compatibility');
-
 console.log('Build complete!');
